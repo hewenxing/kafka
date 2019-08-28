@@ -1,0 +1,71 @@
+安装kafka之前首先要安装zookeeper
+下载kafka
+https://kafka.apache.org/downloads
+我这里下载的是2.3.0  http://mirror.bit.edu.cn/apache/kafka/2.3.0/kafka_2.11-2.3.0.tgz
+mkdir /usr/local/kafka
+tar zxvf kafka_2.11-2.3.0.tgz -C /usr/local/kafka
+cd /usr/local/kafka/kafka_2.11-2.3.0
+mkdir logs
+cd config/
+vim server.properties
+
+#当前机器在集群中的唯一标识，和zookeeper的myid性质一样
+broker.id=0
+#当前kafka服务侦听的地址和端口，端口默认是9092
+listeners = PLAINTEXT://192.168.100.21:9092
+#这个是borker进行网络处理的线程数
+num.network.threads=3
+#这个是borker进行I/O处理的线程数
+num.io.threads=8
+#发送缓冲区buffer大小，数据不是一下子就发送的，先会存储到缓冲区到达一定的大小后在发送，能提高性能
+socket.send.buffer.bytes=102400
+#kafka接收缓冲区大小，当数据到达一定大小后在序列化到磁盘
+socket.receive.buffer.bytes=102400
+#这个参数是向kafka请求消息或者向kafka发送消息的请请求的最大数，这个值不能超过java的堆栈大小
+socket.request.max.bytes=104857600
+#消息日志存放的路径
+log.dirs=/opt/module/kafka_2.11-1.1.0/logs
+#默认的分区数，一个topic默认1个分区数
+num.partitions=1
+#每个数据目录用来日志恢复的线程数目
+num.recovery.threads.per.data.dir=1
+#默认消息的最大持久化时间，168小时，7天
+log.retention.hours=168
+#这个参数是：因为kafka的消息是以追加的形式落地到文件，当超过这个值的时候，kafka会新起一个文件
+log.segment.bytes=1073741824
+#每隔300000毫秒去检查上面配置的log失效时间
+log.retention.check.interval.ms=300000
+#是否启用log压缩，一般不用启用，启用的话可以提高性能
+log.cleaner.enable=false
+#设置zookeeper的连接端口
+zookeeper.connect=node21:2181,node22:2181,node23:2181
+#设置zookeeper的连接超时时间
+zookeeper.connection.timeout.ms=6000
+
+scp -r /usr/local/kafka/ root@node2:/usr/local/
+scp -r /usr/local/kafka/ root@node3:/usr/local/
+修改36，37节点kafka配置文件server.properties里面的broker.id和listeners的值
+
+vi /etc/profile
+#KAFKA_HOME
+export KAFKA_HOME=/usr/local/kafka/kafka_2.11-2.3.0
+export PATH=$PATH:$KAFKA_HOME/bin
+
+source /etc/profile
+cd /usr/local/kafka/kafka_2.11-2.3.0
+bin/kafka-server-start.sh config/server.properties &
+
+创建Topic来验证是否创建成功
+bin/kafka-topics.sh --create --zookeeper test1:2181,test2:2181,test3:2181 --replication-factor 3 --partitions 3 --topic TestTopic
+查看topic副本信息
+bin/kafka-topics.sh --describe --zookeeper test1:2181,test2:2181,test3:2181 --topic TestTopic
+查看已经创建的topic信息
+kafka-topics.sh --list --zookeeper test1:2181,test2:2181,test3:2181
+测试生产者发送消息
+bin/kafka-console-producer.sh --broker-list test1:9092,test2:9092,test3:9092 --topic TestTopic
+测试消费者消费消息(另一台机器)
+kafka-console-consumer.sh --bootstrap-server test1:9092,test2:9092,test3:9092 --from-beginning --topic TestTopic
+删除topic
+kafka-topics.sh --zookeeper test1:2181,test2:2181,test3:2181 --delete --topic TestTopic
+停止Kafka服务
+bin/kafka-server-stop.sh stop
